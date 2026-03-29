@@ -1,11 +1,14 @@
 #include "MirrorRealmProtocol/Gameplay/CardModel.h"
+#include "MirrorRealmProtocol/Gameplay/GameController.h"
 #include "MirrorRealmProtocol/Gameplay/BoardGrid.h"
 #include "MirrorRealmProtocol/Gameplay/VisualManager.h"
 #include "MirrorRealmProtocol/Gameplay/GameStruct.h"
 #include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
-#include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "GameFramework/PlayerState.h"
+#include "Engine/World.h"
+
 
 void ACardModel::Tick(float DeltaSeconds)
 {
@@ -130,6 +133,143 @@ void ACardModel::SetEntryTransform(const FIntPoint Index)
 	SetActorScale3D(FVector::OneVector);
 }
 
+void ACardModel::ReceiveEvent(const FOrderUpdateEvent& Event)
+{
+	Events.AddUnique(Event);
+	if (GEngine)
+	{
+		const FString EventTypeString = UEnum::GetValueAsString(Events[EventIndex].EventType);
+		const FString Message = FString::Printf(TEXT("CardInstID: %d, Event Type: %s, GlobalID: %d"),
+			CardInfo.CardInstID, *EventTypeString, EventIndex);
+		
+		GEngine->AddOnScreenDebugMessage(-1, 100.0f, FColor::Green, Message);
+	}
+	if (!IsProcessing && Events.Num() != 0)
+	{
+		IsProcessing = true;
+		HandleEvent();
+	}
+}
+
+void ACardModel::HandleEvent()
+{
+	if (Events.Num() <= EventIndex)
+	{
+		return;
+	}
+	switch (const FOrderUpdateEvent FoundEvent = Events[EventIndex]; FoundEvent.EventType)
+	{
+	case EEventType::Move :
+		{
+			LocalCardMove(FoundEvent);
+			break;
+		}
+	case EEventType::Attack :
+		{
+			LocalCardAttack(FoundEvent);
+			break;
+		}
+	case EEventType::Damage :
+		{
+			LocalCardTakeDamage(FoundEvent);
+			break;
+		}
+	case EEventType::Activate :
+		{
+			LocalCardActivate(FoundEvent);
+			break;
+		}
+	case EEventType::Update :
+		{
+			LocalCardUpdate(FoundEvent);
+			break;
+		}
+	default :
+		{
+			break;
+		}
+	}
+}
+
+void ACardModel::Continue()
+{
+	EventIndex++;
+	if (Events.Num() <= EventIndex)
+	{
+		IsProcessing = false;
+		return;
+	}
+	HandleEvent();
+}
+
+void ACardModel::LocalCardMove(const FOrderUpdateEvent& Event)
+{
+	if (CardInfo.CardInstID == Event.IntInfo[0] || (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Deck && Event.LocationInfo[1] == ELocation::Hand))
+	{
+		ReceiveCardInfo(Event.SCardInfo[0]);
+	}
+	if (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Deck && Event.LocationInfo[1] == ELocation::Hand)
+	{
+		ReceiveCardInfo(Event.SCardInfo[0]);
+		Team = Event.IntInfo[1] == VisualManager -> Controller -> PlayerState -> GetPlayerId() ? ETeamType::Owner : ETeamType::Opponent;
+		VisualManager -> DecideHandLocation(this);
+		PlayDrawAnim(Event);
+		return;
+	}
+	if (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Hand && Event.LocationInfo[1] == ELocation::Board)
+	{
+		VisualManager -> ModifyHandLocation(this);
+		PlayEntryAnim(Event);
+		return;
+	}
+	if (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Hand && Event.LocationInfo[1] == ELocation::Grave)
+	{
+		VisualManager -> ModifyHandLocation(this);
+		 PlayCastAnim(Event);
+		return;
+	}
+	if (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Board && Event.LocationInfo[1] == ELocation::Grave)
+	{
+		PlayLeaveAnim(Event);
+		return;
+	}
+}
+
+void ACardModel::LocalCardAttack(const FOrderUpdateEvent& Event)
+{
+	if (CardInfo.CardInstID == Event.IntInfo[0])
+	{
+		ReceiveCardInfo(Event.SCardInfo[0]);
+		PlayAttackAnim(Event);
+	}
+}
+
+void ACardModel::LocalCardTakeDamage(const FOrderUpdateEvent& Event)
+{
+	if (CardInfo.CardInstID == Event.IntInfo[2])
+	{
+		ReceiveCardInfo(Event.SCardInfo[0]);
+		PlayDamageAnim(Event);
+	}
+}
+
+void ACardModel::LocalCardActivate(const FOrderUpdateEvent& Event)
+{
+	if (CardInfo.CardInstID == Event.IntInfo[0])
+	{
+		ReceiveCardInfo(Event.SCardInfo[0]);
+		PlayActivateAnim(Event);
+	}
+}
+
+void ACardModel::LocalCardUpdate(const FOrderUpdateEvent& Event)
+{
+	if (CardInfo.CardInstID == Event.IntInfo[0])
+	{
+		ReceiveCardInfo(Event.SCardInfo[0]);
+	}
+}
+
 void ACardModel::PlayDrawAnim_Implementation(const FOrderUpdateEvent& Event)
 {
 	CardState = ECardState::Anim;
@@ -138,10 +278,7 @@ void ACardModel::PlayDrawAnim_Implementation(const FOrderUpdateEvent& Event)
 void ACardModel::DrawAnimEnd()
 {
 	CardState = ECardState::LinearLep;
-	if(VisualManager)
-	{
-		VisualManager -> Continue();
-	}
+	Continue();
 }
 
 void ACardModel::PlayEntryAnim_Implementation(const FOrderUpdateEvent& Event)
@@ -164,10 +301,19 @@ void ACardModel::EntryAnimEnd()
 {
 	CardState = ECardState::LinearLep;
 	TargetLocation = GetActorLocation();
-	if(VisualManager)
-	{
-		VisualManager -> Continue();
-	}
+	Continue();
+}
+
+void ACardModel::PlayLeaveAnim_Implementation(const FOrderUpdateEvent& Event)
+{
+	LeaveAnimEnd();
+}
+
+void ACardModel::LeaveAnimEnd()
+{
+	CardState = ECardState::LinearLep;
+	Continue();
+	Destroy();
 }
 
 void ACardModel::PlayCastAnim_Implementation(const FOrderUpdateEvent& Event)
@@ -178,10 +324,7 @@ void ACardModel::PlayCastAnim_Implementation(const FOrderUpdateEvent& Event)
 void ACardModel::CastAnimEnd()
 {
 	CardState = ECardState::LinearLep;
-	if(VisualManager)
-	{
-		VisualManager -> Continue();
-	}
+	Continue();
 	Destroy();
 }
 
@@ -193,10 +336,7 @@ void ACardModel::PlayAttackAnim_Implementation(const FOrderUpdateEvent& Event)
 void ACardModel::AttackAnimEnd_Implementation()
 {
 	CardState = ECardState::LinearLep;
-	if(VisualManager)
-	{
-		VisualManager -> Continue();
-	}
+	Continue();
 }
 
 void ACardModel::PlayDamageAnim_Implementation(const FOrderUpdateEvent& Event)
@@ -207,14 +347,7 @@ void ACardModel::PlayDamageAnim_Implementation(const FOrderUpdateEvent& Event)
 void ACardModel::DamageAnimEnd()
 {
 	CardState = ECardState::LinearLep;
-	if(IsPendingKill)
-	{
-		Destroy();
-	}
-	if(VisualManager)
-	{
-		VisualManager -> Continue();
-	}
+	Continue();
 }
 
 void ACardModel::PlayActivateAnim_Implementation(const FOrderUpdateEvent& Event)
@@ -225,10 +358,7 @@ void ACardModel::PlayActivateAnim_Implementation(const FOrderUpdateEvent& Event)
 void ACardModel::ActivateAnimEnd()
 {
 	CardState = ECardState::LinearLep;
-	if(VisualManager)
-	{
-		VisualManager -> Continue();
-	}
+	Continue();
 }
 
 void ACardModel::ReceiveCardInfo(const FCardInfo& CI)
@@ -245,25 +375,13 @@ void ACardModel::UpdateCardInfo_Implementation(const FCardInfo& CI)
 	
 }
 
-void ACardModel::TryKill()
-{
-	if (CardState == ECardState::Anim)
-	{
-		IsPendingKill = true;
-	}
-	else
-	{
-		Destroy();
-	}
-}
-
 FVector ACardModel::CalculateAdditiveLocation()
 {
 	if (CardState != ECardState::Static) return FVector::ZeroVector;
 		
 	if (!bIsOverlap && !bIsSelected) return FVector::ZeroVector;
 	
-	switch(Location)
+	switch(CardInfo.Location)
 	{
 	case ELocation::Hand :
 		{

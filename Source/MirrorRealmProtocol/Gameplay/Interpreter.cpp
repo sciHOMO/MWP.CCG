@@ -412,13 +412,6 @@ void UInterpreter::CardActivate(const int CardInstID)
 	if (!CardInfo) return;
 
 	CardInfo -> Action = false;
-
-	FOrderUpdateEvent NewEvent;
-	NewEvent.EventType = EEventType::Activate;
-	NewEvent.IntInfo.Emplace(CardInstID);
-	NewEvent.SCardInfo.Emplace(*CardInfo);
-	NewEvent.GlobalEventID = Server -> GlobalEventID++;
-	Server -> DispatchEvent(NewEvent);
 	
 	for (const FCardEffect& CardEffect : CardInfo -> CardEffects)
 	{

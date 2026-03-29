@@ -18,13 +18,13 @@ public:
 	//初始化
 	UFUNCTION()
 	void BeginPlay();
+
+	UFUNCTION()
+	void Tick();
 	
 	//接收事件
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 LocalEventID = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bIsProcessing = false;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<FOrderUpdateEvent> Events;
@@ -34,10 +34,7 @@ public:
 	
 	UFUNCTION()
 	void HandleEvent();
-
-	UFUNCTION()
-	void Continue();
-
+	
 	UFUNCTION(BlueprintCallable)
 	static void Test(const FOrderUpdateEvent& Event);
 
@@ -59,23 +56,11 @@ public:
 	void ShowWinner(const FOrderUpdateEvent& Event);
 	
 	UFUNCTION()
-	void LocalCardMove(const FOrderUpdateEvent& Event);
+	void LocalCardEvent(const FOrderUpdateEvent& Event);
 
 	UFUNCTION()
-	void LocalCardAttack(const FOrderUpdateEvent& Event);
-
-	UFUNCTION()
-	void LocalCardDamage(const FOrderUpdateEvent& Event);
-
-	UFUNCTION()
-	void LocalPlayerDamage(const FOrderUpdateEvent& Event);
-
-	UFUNCTION()
-	void LocalCardActivate(const FOrderUpdateEvent& Event);
+	void LocalPlayerTakeDamage(const FOrderUpdateEvent& Event);
 	
-	UFUNCTION()
-	void LocalCardUpdate(const FOrderUpdateEvent& Event);
-
 	//特殊事件，重分配手牌位置
 	UFUNCTION(BlueprintCallable)
 	void DecideHandLocation(ACardModel* Model);

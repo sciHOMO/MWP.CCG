@@ -28,22 +28,24 @@ void UVisualManager::BeginPlay()
 	}
 }
 
+void UVisualManager::Tick()
+{
+	HandleEvent();
+}
+
 void UVisualManager::ReceiveEvent(const FOrderUpdateEvent& NewEvent)
 {
-	Events.AddUnique(NewEvent);
-	const FOrderUpdateEvent* FoundEvent = Events.FindByPredicate([this](const FOrderUpdateEvent& Item) {return Item.GlobalEventID == LocalEventID;});	//记住这个Lambda搜索模式
-	if (!bIsProcessing && FoundEvent)
+	if (!Events.Contains(NewEvent))
 	{
-		HandleEvent();
+		Events.Insert(NewEvent, 0);
 	}
 }
 
 void UVisualManager::HandleEvent()
 {
-	const FOrderUpdateEvent* FoundEvent = Events.FindByPredicate([this](const FOrderUpdateEvent& Item) {return Item.GlobalEventID == LocalEventID;});
-	if (!bIsProcessing && FoundEvent)
+	if (const FOrderUpdateEvent* FoundEvent = Events.FindByPredicate([this](const FOrderUpdateEvent& Item) {return Item.GlobalEventID == LocalEventID;}))
 	{
-		bIsProcessing = true;
+		LocalEventID++;
 		switch (FoundEvent -> EventType)
 		{
 		case EEventType::Turn :
@@ -56,50 +58,17 @@ void UVisualManager::HandleEvent()
 				ShowWinner(*FoundEvent);
 				break;
 			}
-		case EEventType::Move :
-			{
-				LocalCardMove(*FoundEvent);
-				break;
-			}
-		case EEventType::Attack :
-			{
-				LocalCardAttack(*FoundEvent);				
-				break;
-			}
-		case EEventType::Damage :
-			{
-				LocalCardDamage(*FoundEvent);
-				break;
-			}
 		case EEventType::PlayerDamage :
 			{
-				LocalPlayerDamage(*FoundEvent);				
+				LocalPlayerTakeDamage(*FoundEvent);				
 				break;
 			}
-		case EEventType::Activate :
+		default :
 			{
-				LocalCardActivate(*FoundEvent);	
+				LocalCardEvent(*FoundEvent);
 				break;
-			}
-		case EEventType::Update :
-			{
-				LocalCardUpdate(*FoundEvent);	
-				break;
-			}	
-		default : break;
+			};
 		}
-	}
-}
-
-void UVisualManager::Continue()
-{
-	bIsProcessing = false;
-	Events.RemoveAll([this](const FOrderUpdateEvent& Item) {return Item.GlobalEventID == LocalEventID;});	//记住这个Lambda删除模式
-	LocalEventID++;
-	const FOrderUpdateEvent* FoundEvent = Events.FindByPredicate([this](const FOrderUpdateEvent& Item) {return Item.GlobalEventID == LocalEventID;});
-	if (!bIsProcessing && FoundEvent)
-	{
-		HandleEvent();
 	}
 }
 
@@ -107,7 +76,6 @@ void UVisualManager::Test(const FOrderUpdateEvent& Event)
 {
 	if (GEngine)
 	{
-
 		const FString EventTypeString = UEnum::GetValueAsString(Event.EventType);
 		const FString Message = FString::Printf(TEXT("Event Type: %s, GlobalID: %d"),
 			*EventTypeString, Event.GlobalEventID);
@@ -121,7 +89,6 @@ void UVisualManager::TurnChange(const FOrderUpdateEvent& Event)
 	TArray<UUserWidget*> AllWidgets;
 	UWidgetBlueprintLibrary::GetAllWidgetsWithInterface(GetWorld(), AllWidgets, UToUMG::StaticClass(), true);
 	IToUMG::Execute_TurnChange(AllWidgets[0], Event.IntInfo[0]);
-	Continue();
 }
 
 void UVisualManager::ShowWinner(const FOrderUpdateEvent& Event)
@@ -129,10 +96,9 @@ void UVisualManager::ShowWinner(const FOrderUpdateEvent& Event)
 	TArray<UUserWidget*> AllWidgets;
 	UWidgetBlueprintLibrary::GetAllWidgetsWithInterface(GetWorld(), AllWidgets, UToUMG::StaticClass(), true);
 	IToUMG::Execute_ShowWinner(AllWidgets[0], Event.IntInfo[0]);
-	Continue();
 }
 
-void UVisualManager::LocalCardMove(const FOrderUpdateEvent& Event)
+void UVisualManager::LocalCardEvent(const FOrderUpdateEvent& Event)
 {
 	if (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Deck && Event.LocationInfo[1] == ELocation::Hand)
 	{
@@ -159,133 +125,22 @@ void UVisualManager::LocalCardMove(const FOrderUpdateEvent& Event)
 		ACardModel* NewCard = Controller -> GetWorld() -> SpawnActor<ACardModel>(CardModelClass, SpawnTransform);
 		AllCards.Emplace(NewCard);
 		NewCard -> VisualManager = this;
-		NewCard -> ReceiveCardInfo(Event.SCardInfo[0]);
-		NewCard -> Team = Event.IntInfo[1] == Controller -> PlayerState -> GetPlayerId() ? ETeamType::Owner : ETeamType::Opponent;
-		NewCard -> Location = ELocation::Hand;
-		NewCard -> Position = FIntPoint::NoneValue;
-		DecideHandLocation(NewCard);
-		NewCard -> PlayDrawAnim(Event);
+		NewCard -> ReceiveEvent(Event);
 		return;
 	}
-	if (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Hand && Event.LocationInfo[1] == ELocation::Board)
-	{
-		for (ACardModel* Card : AllCards)
-		{
-			if (Card && Card -> CardInfo.CardInstID == Event.IntInfo[0])
-			{
-				Card -> ReceiveCardInfo(Event.SCardInfo[0]);
-				Card -> Location = ELocation::Board;
-				Card -> Position = Event.PositionInfo[1];
-				ModifyHandLocation(Card);
-				Card -> PlayEntryAnim(Event);
-				return;
-			}
-		}
-		Continue();
-		return;
-	}
-	if (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Hand && Event.LocationInfo[1] == ELocation::Grave)
-	{
-		for (ACardModel* Card : AllCards)
-		{
-			if (Card && Card -> CardInfo.CardInstID == Event.IntInfo[0])
-			{
-				Card -> ReceiveCardInfo(Event.SCardInfo[0]);
-				Card -> Location = ELocation::Grave;
-				Card -> Position = FIntPoint::NoneValue;
-				ModifyHandLocation(Card);
-				Card -> PlayCastAnim(Event);
-				return;
-			}
-		}
-		Continue();
-		return;
-	}
-	if (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Board && Event.LocationInfo[1] == ELocation::Grave)
-	{
-		for (ACardModel* Card : AllCards)
-		{
-			if (Card && Card -> CardInfo.CardInstID == Event.IntInfo[0])
-			{
-				Card -> ReceiveCardInfo(Event.SCardInfo[0]);
-				Card -> Location = ELocation::Grave;
-				Card -> Position = FIntPoint::NoneValue;
-				Card -> TryKill();
-				Continue();
-				return;
-			}
-		}
-		Continue();
-		return;
-	}
-	if (Event.LocationInfo.Num() == 2 && Event.LocationInfo[0] == ELocation::Grave && Event.LocationInfo[1] == ELocation::Banish)
-	{
-		return;
-	}
-}
-
-void UVisualManager::LocalCardAttack(const FOrderUpdateEvent& Event)
-{
-	for (ACardModel* Card : AllCards)
-	{
-		if (Card && Card-> CardInfo.CardInstID == Event.IntInfo[0])
-		{
-			Card -> ReceiveCardInfo(Event.SCardInfo[0]);
-			Card -> PlayAttackAnim(Event);
-			return;
-		}
-	}
-	Continue();
-}
-
-void UVisualManager::LocalCardDamage(const FOrderUpdateEvent& Event)
-{
 	for (ACardModel* Card : AllCards)
 	{
 		if (Card && Card -> CardInfo.CardInstID == Event.IntInfo[0])
 		{
-			Card -> ReceiveCardInfo(Event.SCardInfo[0]);
-			Card -> PlayDamageAnim(Event);
+			Card -> ReceiveEvent(Event);
 			return;
 		}
 	}
-	Continue();
 }
 
-void UVisualManager::LocalPlayerDamage(const FOrderUpdateEvent& Event)
+void UVisualManager::LocalPlayerTakeDamage(const FOrderUpdateEvent& Event)
 {
-	Continue();
-}
-
-void UVisualManager::LocalCardActivate(const FOrderUpdateEvent& Event)
-{
-	for (ACardModel* Card : AllCards)
-	{
-		if (Card && Card -> CardInfo.CardInstID == Event.IntInfo[0])
-		{
-			if (Controller -> Server -> GetCardInstCopybyID( Event.IntInfo[0]) -> CardType == ECardType::Servant)
-			{
-				Card -> ReceiveCardInfo(Event.SCardInfo[0]);
-				Card -> PlayActivateAnim(Event);
-				return;
-			}
-		}
-	}
-		Continue();
-}
-
-void UVisualManager::LocalCardUpdate(const FOrderUpdateEvent& Event)
-{
-	for (ACardModel* Card : AllCards)
-	{
-		if (Card && Card -> CardInfo.CardInstID == Event.IntInfo[0])
-		{
-			Card -> ReceiveCardInfo(Event.SCardInfo[0]);
-			Continue();
-			return;
-		}
-	}
-	Continue();
+	
 }
 
 void UVisualManager::DecideHandLocation(ACardModel* Model)
@@ -296,11 +151,11 @@ void UVisualManager::DecideHandLocation(ACardModel* Model)
 	//遍历现有卡牌
 	for (ACardModel* Card : AllCards)
 	{
-		if (Card && Card -> CardInfo.PlayerID == 0 && Card -> Location == ELocation::Hand)
+		if (Card && Card -> CardInfo.PlayerID == 0 && Card -> CardInfo.Location == ELocation::Hand)
 		{
 			Total_P0 ++;
 		}
-		if (Card && Card -> CardInfo.PlayerID == 1 && Card -> Location == ELocation::Hand)
+		if (Card && Card -> CardInfo.PlayerID == 1 && Card -> CardInfo.Location == ELocation::Hand)
 		{
 			Total_P1 ++;
 		}
@@ -314,12 +169,12 @@ void UVisualManager::DecideHandLocation(ACardModel* Model)
 	//设置其他卡牌的Index
 	for (ACardModel* Card : AllCards)
 	{
-		if (Card -> CardInfo.PlayerID == 0 && Card -> Location == ELocation::Hand)
+		if (Card -> CardInfo.PlayerID == 0 && Card -> CardInfo.Location == ELocation::Hand)
 		{
 			Card -> TotalInHand = Total_P0;
 			Card -> SetHandLocation();
 		}
-		if (Card -> CardInfo.PlayerID == 1 && Card -> Location == ELocation::Hand)
+		if (Card -> CardInfo.PlayerID == 1 && Card -> CardInfo.Location == ELocation::Hand)
 		{
 			Card -> TotalInHand = Total_P1;
 			Card -> SetHandLocation();
@@ -331,7 +186,7 @@ void UVisualManager::ModifyHandLocation(ACardModel* Model)
 {
 	for (ACardModel* Card : AllCards)
 	{
-		if (Card&& Card -> CardInfo.PlayerID == Model -> CardInfo.PlayerID && Card -> Location == ELocation::Hand)
+		if (Card&& Card -> CardInfo.PlayerID == Model -> CardInfo.PlayerID && Card -> CardInfo.Location == ELocation::Hand)
 		{
 			Card -> TotalInHand--;
 			if (Card -> IndexInHand > Model -> IndexInHand) Card -> IndexInHand--;

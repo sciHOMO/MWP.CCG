@@ -299,8 +299,7 @@ struct  MIRRORREALMPROTOCOL_API FCardInfo
 		}
 		return true;
 	}
-	 
-
+	
 	bool operator ==(const FCardInfo& CI) const
 	{
 		return

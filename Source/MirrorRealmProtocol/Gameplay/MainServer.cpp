@@ -119,8 +119,8 @@ void AMainServer::StartGame()
 {
 	if (Interpreter)
 	{
-	//	Interpreter -> DrawCard(0, 4);
-	// Interpreter -> DrawCard(1, 4);
+	Interpreter -> DrawCard(0, 1);
+	Interpreter -> DrawCard(1, 1);
 	}
 	PreStartTurn();
 }
@@ -164,7 +164,7 @@ void AMainServer::StartTurn()
 	TurnOwner == 0 ? Player_0_Mana = FMath::Max(Player_0_Mana + 1, Player_0_MaxMana) : Player_1_Mana = FMath::Max(Player_1_Mana + 1, Player_1_MaxMana);
 	if (Interpreter)
 	{
-		Interpreter -> DrawCard(TurnOwner, 1);
+		//Interpreter -> DrawCard(TurnOwner, 1);
 	}
 }
 

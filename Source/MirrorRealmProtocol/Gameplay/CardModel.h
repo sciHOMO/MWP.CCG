@@ -71,12 +71,6 @@ public:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	ECardState CardState = ECardState::PlaceHolder;
-		
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	ELocation Location;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FIntPoint Position;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int TotalInHand;
@@ -104,7 +98,41 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void SetEntryTransform(const FIntPoint Index);
+
+	//事件表现
+	UFUNCTION()
+	void ReceiveEvent(const FOrderUpdateEvent& Event);
 	
+	UFUNCTION()
+	void HandleEvent();
+	
+	UFUNCTION()
+	void Continue();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int EventIndex = 0;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FOrderUpdateEvent> Events;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool IsProcessing = false;
+	
+	UFUNCTION()
+	void LocalCardMove(const FOrderUpdateEvent& Event);
+
+	UFUNCTION()
+	void LocalCardAttack(const FOrderUpdateEvent& Event);
+
+	UFUNCTION()
+	void LocalCardTakeDamage(const FOrderUpdateEvent& Event);
+	
+	UFUNCTION()
+	void LocalCardActivate(const FOrderUpdateEvent& Event);
+	
+	UFUNCTION()
+	void LocalCardUpdate(const FOrderUpdateEvent& Event);
+
 	//卡牌动画
 	UFUNCTION(BlueprintNativeEvent)
 	void PlayDrawAnim(const FOrderUpdateEvent& Event);
@@ -121,6 +149,12 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void EntryAnimEnd();
 
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	void PlayLeaveAnim(const FOrderUpdateEvent& Event);
+
+	UFUNCTION(BlueprintCallable)
+	void LeaveAnimEnd();
+	
 	UFUNCTION(BlueprintNativeEvent)
 	void PlayCastAnim(const FOrderUpdateEvent& Event);
 	
@@ -152,12 +186,6 @@ public:
 
 	UFUNCTION(BlueprintNativeEvent)
 	void UpdateCardInfo(const FCardInfo& CI);
-
-	UFUNCTION()
-	void TryKill();
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool IsPendingKill = false;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool bIsOverlap = false;

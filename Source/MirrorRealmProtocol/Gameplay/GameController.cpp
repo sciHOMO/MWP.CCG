@@ -29,6 +29,10 @@ void AGameController::BeginPlay()
 void AGameController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (VisualManager)
+	{
+		VisualManager -> HandleEvent();
+	}
 }
 
 void AGameController::PostSeamlessTravel()
