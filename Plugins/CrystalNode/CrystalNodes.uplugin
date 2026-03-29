@@ -1,0 +1,28 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "CrystalNodes",
+	"Description": "Crystal clear nodes",
+	"Category": "Other",
+	"CreatedBy": "Skylake",
+	"CreatedByURL": "https://github.com/SkylakeOfficial/CrystalNodes",
+	"DocsURL": "https://github.com/SkylakeOfficial/CrystalNodes/wiki",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/795d430fe08640bcb9f3f52c996a62a0",
+	"SupportURL": "",
+	"EngineVersion": "5.6.0",
+	"CanContainContent": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "CrystalNodes",
+			"Type": "Editor",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
+				"Win64",
+				"Mac",
+				"Linux"
+			]
+		}
+	]
+}
